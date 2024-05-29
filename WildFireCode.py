@@ -14,7 +14,7 @@ one_gridpoint = xr.concat([da[:,120,0] for _, da in data.data_vars.items()], dim
 one_gridpoint = one_gridpoint.to_numpy().T
 
 # Initial pandas dataframe that is appended to later. Initialize on land gridpoint
-all_grid_points = pd.DataFrame(data=one_gridpoint, columns=list(data.variables)[3:])
+all_grid_points = pd.DataFrame(data=one_gridpoint, columns=data.data_vars)
 
 
 #%%
@@ -33,7 +33,7 @@ gridpointlist = [gridpoints,gridpoints2,gridpoints3,gridpoints4]
 lats = len(data['latitude'])
 lons = len(data['longitude'])
 sst = data['sst'][0,:,:]
-var_names = list(data.variables)[3:]
+var_names = data.data_vars#[3:]
 arrlist = [0]*125 + [1]*125 + [2]*125 + [3]*126
 for i in range(lats):
     for j in range(lons):
@@ -46,6 +46,8 @@ for i in range(lats):
         # gridpoint = xr.concat([da[:,i,j] for _, da in data.data_vars.items()], dim='variable').T
         gridpoint = pd.DataFrame(data=gridpoint.to_numpy(), columns=var_names)
         all_grid_points = pd.concat([all_grid_points,gridpoint])
+    if i % 5 == 0:
+        print(i)
 
 
 #%%
