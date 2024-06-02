@@ -12,25 +12,30 @@ import pandas as pd
 
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 import sklearn.preprocessing as preprocessing
-from sklearn.metrics import accuracy_score, log_loss, confusion_matrix, RocCurveDisplay, f1_score
+from sklearn.metrics import accuracy_score, log_loss, confusion_matrix, RocCurveDisplay, f1_score, PredictionErrorDisplay
 
 import xgboost as xgb
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 #%%
-all_data = pd.read_csv('Tabulated grid data.csv').iloc[:,1:]
+all_data = pd.read_csv('Tabulated grid data extra var.csv').drop('sst', axis=1)
 
 #%%
-# train = train.sample(frac=0.1, random_state=112)
-only_burn_true = all_data.loc[all_data['burned_area'] > 0]
+columns_to_drop = ['u100', 'v100', 'u10n', 'v10n', 'stl1', 'stl2', 'strdc', 'ttrc', 'ssrdc', 'tisr', 'ssrd', 'slhf', 'crr', 'ilspf', 
+                   'alnid', 'ishf', 'stl2', 'stl3', 'tsr', 'tsrc', 'tisr', 'strd', 'aluvd', 'swvl2']
+coords = ['time', 'latitude', 'longitude']
+all_data = all_data[list(set(all_data.columns) - set(columns_to_drop))].sort_index(axis=1)
+
 #%%
-some_noburn = all_data.loc[all_data['burned_area'] == 0].sample(frac=0.05, random_state=112)
+all_but_one_month = all_data[all_data['time'] != '2019-06-01']
 #%%
-train = pd.concat([only_burn_true, some_noburn], ignore_index=True)
+only_burn_true = all_but_one_month.loc[all_but_one_month['burned_area'] > 0]
+# only_burn_true.loc[:,'burned_area'] = 1.0
 #%%
-from sklearn.preprocessing import PowerTransformer
-pt = PowerTransformer()
-train_scaled = train.drop('burned_area', axis=1).drop('fraction_of_burnable_area', axis=1)
+# check = train.isna().max()
+train = only_burn_true.dropna()
+#%%
+train_scaled = train[list(set(train.columns) - set(coords))].drop('burned_area', axis=1).sort_index(axis=1)#.drop('fraction_of_burnable_area', axis=1)
 columns = train_scaled.columns
 scaler = preprocessing.StandardScaler()
 train_scaled = scaler.fit_transform(train_scaled)
@@ -80,7 +85,12 @@ RandomSearch_results = pd.DataFrame(RandomSearch.cv_results_)
 
 clf_RandomSearch = RandomSearch.best_estimator_
 #%%
-y_test.hist(bins=20)
+# y_test.hist(bins=20)
 # pd.Series(clf.predict(X_test)).hist(bins=20)
-# y_test.hist(bins='auto', log=True)
+y_test.hist(bins='auto', log=True)
 # pd.Series(clf.predict(X_test)).hist(bins='auto', log=True)
+plt.xlim(0,1e8)
+
+#%%
+fig, ax = plt.subplots(figsize=[5,5])
+PredictionErrorDisplay.from_estimator(clf, X_test, y_test, ax=ax)
