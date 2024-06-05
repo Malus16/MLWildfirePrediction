@@ -24,22 +24,24 @@ import xgboost as xgb
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 #%%
-all_data = pd.read_csv('Tabulated grid data extra var.csv').drop('sst', axis=1)
+all_data = pd.read_csv('Tabulated grid data w dew wo corr.csv').drop('sst', axis=1)
 
 #%%
-columns_to_drop = ['u100', 'v100', 'u10n', 'v10n', 'stl1', 'stl2', 'strdc', 'ttrc', 'ssrdc', 'tisr', 'ssrd', 'slhf', 'crr', 'ilspf', 
-                   'alnid', 'ishf', 'stl2', 'stl3', 'tsr', 'tsrc', 'tisr', 'strd', 'aluvd', 'swvl2']
-coords = ['time', 'latitude', 'longitude']
-all_data = all_data[list(set(all_data.columns) - set(columns_to_drop))].sort_index(axis=1)
+# columns_to_drop = ['u100', 'v100', 'u10n', 'v10n', 'stl1', 'stl2', 'strdc', 'ttrc', 'ssrdc', 'tisr', 'ssrd', 'slhf', 'crr', 'ilspf', 
+#                    'alnid', 'ishf', 'stl2', 'stl3', 'tsr', 'tsrc', 'tisr', 'strd', 'aluvd', 'swvl2']
+# coords = ['time', 'latitude', 'longitude']
+coords = ['time']
+# all_data = all_data[list(set(all_data.columns) - set(columns_to_drop))].sort_index(axis=1)
 
 #%%
-all_but_one_month = all_data[all_data['time'] != '2018-06-01']
+the_month = '2019-06-01'
+all_but_one_month = all_data[all_data['time'] != the_month]
 #%%
 # train = train.sample(frac=0.1, random_state=112)
 only_burn_true = all_but_one_month.loc[all_but_one_month['burned_area'] > 0]
 only_burn_true.loc[:,'burned_area'] = 1.0
 #%%
-some_noburn = all_but_one_month.loc[all_data['burned_area'] == 0].sample(frac=0.1, random_state=112)
+some_noburn = all_but_one_month.loc[all_data['burned_area'] == 0].sample(frac=0.15, random_state=112)
 #%%
 train = pd.concat([only_burn_true, some_noburn], ignore_index=True)
 #%%
@@ -47,10 +49,10 @@ train = pd.concat([only_burn_true, some_noburn], ignore_index=True)
 train = train.dropna()
 #%%
 train_scaled = train[list(set(train.columns) - set(coords))].drop('burned_area', axis=1).sort_index(axis=1)#.drop('fraction_of_burnable_area', axis=1)
-columns = train_scaled.columns
-scaler = preprocessing.StandardScaler()
-train_scaled = scaler.fit_transform(train_scaled)
-train_scaled = pd.DataFrame(data=train_scaled, columns=columns)
+# columns = train_scaled.columns
+# scaler = preprocessing.StandardScaler()
+# train_scaled = scaler.fit_transform(train_scaled)
+# train_scaled = pd.DataFrame(data=train_scaled, columns=columns)
 
 
 X = train_scaled
@@ -61,29 +63,51 @@ X_train, X_test, y_train, y_test = train_test_split(X,
                                                     y, 
                                                     test_size=0.20, 
                                                     random_state=111)
+#%%
+X_train_nolatlon, X_test_nolatlon, y_train_nolatlon, y_test_nolatlon = train_test_split(X, 
+                                                                                        y, 
+                                                                                        test_size=0.20, 
+                                                                                        random_state=111)
 
 #%%
-one_month = all_data[all_data['time'] == '2018-06-01']
-one_month['burned_area'] = one_month['burned_area'].where(one_month['burned_area'] == 0, other=1)
+one_month = all_data[all_data['time'] == the_month]
+one_month.loc[:,'burned_area'] = 1.0
+# one_month['burned_area'] = one_month['burned_area'].where(one_month['burned_area'] == 0, other=1)
 one_month_X = one_month[list(set(one_month.columns) - set(coords))].drop(['burned_area'], axis=1).sort_index(axis=1)
-one_month_X = scaler.transform(one_month_X)
-one_month_X = pd.DataFrame(data=one_month_X, columns=columns)
+# one_month_X = scaler.transform(one_month_X)
+# one_month_X = pd.DataFrame(data=one_month_X, columns=columns)
 #%%
+# w_latlon
 pos_weight = 1
-clf = xgb.XGBClassifier(n_estimators=150, max_depth=25, max_bin=100, learning_rate=0.05, tree_method="hist", 
+clf = xgb.XGBClassifier(n_estimators=150, max_depth=30, max_bin=100, learning_rate=0.05, tree_method="hist", 
                         scale_pos_weight=pos_weight, early_stopping_rounds=2, objective='binary:logistic')
-clf.fit(X_train,y_train, eval_set=[(X_test, y_test)], verbose=1);
+clf.fit(X_train,y_train, eval_set=[(X_test, y_test)], verbose=1)
 
 print(accuracy_score(y_test, clf.predict(X_test)))
 clf.best_score
 # accuracy_score(y_train, clf.predict(X_train))
 log_loss(y_test, clf.predict(X_test))
+
+#%%
+# no_latlon
+pos_weight = 1
+clf_nolatlon = xgb.XGBClassifier(n_estimators=150, max_depth=30, max_bin=100, learning_rate=0.05, tree_method="hist", 
+                        scale_pos_weight=pos_weight, early_stopping_rounds=2, objective='binary:logistic')
+clf_nolatlon.fit(X_train,y_train, eval_set=[(X_test, y_test)], verbose=1)
+
+print(accuracy_score(y_test, clf_nolatlon.predict(X_test)))
+clf.best_score
+# accuracy_score(y_train, clf.predict(X_train))
+log_loss(y_test, clf_nolatlon.predict(X_test))
 #%%
 # confusion_matrix(y_test, clf.predict(X_test))
 fig, ax = plt.subplots(figsize=[5,5])
 # RocCurveDisplay.from_estimator(clf, X_test, y_test, ax=ax)
 # f1_score(y_test, clf.predict(X_test))
-DetCurveDisplay.from_estimator(clf, X_test, y_test, ax=ax)
+# DetCurveDisplay.from_estimator(clf, X_test, y_test, ax=ax, **{'label': 'With lat-lon'})
+# DetCurveDisplay.from_estimator(clf_nolatlon, X_test_nolatlon, y_test_nolatlon, ax=ax, **{'label': 'Without lat-lon'})
+RocCurveDisplay.from_estimator(clf, X_test, y_test, ax=ax)#, **{'label': 'With lat-lon'})
+RocCurveDisplay.from_estimator(clf_nolatlon, X_test_nolatlon, y_test_nolatlon, ax=ax)#, **{'label': 'Without lat-lon'})
 
 #%%
 permutation_result = permutation_importance(clf, X_test[:10000], y_test[:10000])
@@ -96,8 +120,8 @@ shap_values = explainer(X_test[:500], check_additivity=False)
 shap.plots.bar(shap_values)
 
 #%%
-pred = clf.predict_proba(one_month_X)[:,1]
-# pred = clf.predict(one_month_X)
+# pred = clf.predict_proba(one_month_X)[:,1]
+pred = clf.predict(one_month_X)
 # corr = X_train.corr()
 # corr = corr.abs()
 # upper_corr = corr.where(~np.tril(np.ones(corr.shape)).astype(bool))
@@ -133,10 +157,12 @@ def create_grid(grid,pred=None):
     return grid_array
 
 grid_array = create_grid(one_month, pred=pred)
+
+# grid_array_wlatlon = grid_array
 #%%
 fig = plt.figure(layout='tight')
 fig.set_figwidth(10)
-cmap = colors.LinearSegmentedColormap.from_list("", ["white", "darkred"], N=10)
+cmap = colors.LinearSegmentedColormap.from_list("", ["white", "darkred"], N=2)
 crs = ccrs.Miller(central_longitude=-110)#, standard_parallels=(30,55))
 ax = plt.axes(projection=crs)
 lakes_50m = cfeature.NaturalEarthFeature('physical', 'lakes', '50m')
@@ -147,8 +173,18 @@ ax.coastlines()
 ax.add_feature(lakes_50m)
 # ax.add_feature(rivers_50m)
 ax.gridlines(draw_labels={"bottom": "x", "left": "y"}, dms=True, x_inline=False, y_inline=False)
-# c = plt.contourf(unique_lons, unique_lats, grid_array, transform=ccrs.PlateCarree(), cmap=cmap)
-c = plt.contourf(unique_lons, unique_lats, grid_array, transform=ccrs.PlateCarree(), cmap=cmap, levels=np.linspace(0,1,11))
-cb = plt.colorbar(c, location='right', shrink=1)
+c = plt.contourf(unique_lons, unique_lats, grid_array, transform=ccrs.PlateCarree(), cmap=cmap)
+# c = plt.contourf(unique_lons, unique_lats, grid_array, transform=ccrs.PlateCarree(), cmap=cmap, levels=np.linspace(0,1,11))
+# cb = plt.colorbar(c, location='right', shrink=1)
 plt.title(f'Burned area: 2019-06 model prediction pos_weight={pos_weight}')
+# plt.title(f'Burned area: 2018-06 model prediction pos_weight={pos_weight}')
 # plt.title('Burned area: 2018-06 reanalysis data')
+
+#%%
+import pickle
+with open("classifier_nolatlon.pkl", "wb") as f:
+    pickle.dump(clf_nolatlon, f)
+
+#%%
+with open("classifier_nolatlon.pkl", "rb") as f:
+    loaded_object = pickle.load(f)

@@ -3,20 +3,36 @@ import matplotlib.pyplot as plt
 import xarray as xr
 import pandas as pd
 #%%
-data2 = xr.open_dataset('merge_fixed.nc')
+dew_veg = xr.open_dataset('ERA5_2mdew_veg.nc')
+#%%
+merge_fixed = xr.open_dataset('merge_fixed.nc')
 #%%
 burned_area = xr.open_dataset('merge_fixed.nc')['burned_area']
+fraction_burnable = xr.open_dataset('merge_fixed.nc')['fraction_of_burnable_area']
 data = xr.open_dataset('ERA5.nc')
 data = data.isel(time=slice(None,-36))
 burned_area.coords['time'] = data['t2m'].coords['time']
+fraction_burnable.coords['time'] = data['t2m'].coords['time']
 data['burned_area'] = burned_area
+data['fraction_of_burnable_area'] = fraction_burnable
+
+
+columns_to_drop = ['u100', 'v100', 'u10n', 'v10n', 'stl1', 'stl2', 'strdc', 'ttrc', 'ssrdc', 'tisr', 'ssrd', 'slhf', 'crr', 'ilspf', 
+                   'alnid', 'ishf', 'stl2', 'stl3', 'tsr', 'tsrc', 'tisr', 'strd', 'aluvd', 'swvl2']
+data = data.drop_vars(columns_to_drop)
+#%%
+dew_veg.coords['time'] = data['t2m'].coords['time']
+for var_name, da in dew_veg.data_vars.items():
+    data[var_name] = dew_veg[var_name]
+
 #%%
 for var_name, da in data.data_vars.items():
     if da.dtype == "float64":
         data[var_name] = da.astype("float32")
 
 #%%
-data = data.sel(time=xr.DataArray([f'20{y:02d}-{m:02d}-01' for y in range(10,20) for m in range(4,11)], dims=['time']))
+# data = data.sel(time=xr.DataArray([f'20{y:02d}-{m:02d}-01' for y in range(10,20) for m in range(4,11)], dims=['time']))
+data = data.sel(time=xr.DataArray([f'20{y:02d}-{m:02d}-01' for y in range(1,20) for m in range(4,11)], dims=['time']))
 #%%
 # data.to_netcdf("ERA5_wBurned_float32.nc", format="NETCDF4", encoding={"zlib": True})
 #%%
@@ -26,12 +42,12 @@ all_gridpoints = data.to_dataframe()
 # all_gridpoints = all_gridpoints.dropna(subset=['burned_area'])
 all_gridpoints = all_gridpoints[all_gridpoints['sst'].isna()]
 #%%
-all_gridpoints.to_csv('Tabulated grid data extra var.csv')
+all_gridpoints.to_csv('Tabulated grid data w dew wo corr.csv')
 #%%
 wow_mod = wow_mod.dropna(dim='latitude', subset=['burned_area'], how='all')
 
 #%%
-for var in data.data_vars:
+for var in dew_veg.data_vars:
     print(f'{var}: {data[var].long_name}')
 
 #%%
